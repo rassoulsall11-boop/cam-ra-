@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Facial Multi-Cibles Ultra-Fluide</title>
+    
+    <!-- Scripts MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background-color: #030712;
+            color: #00ffcc;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        h2 { 
+            margin: 10px 0; 
+            font-size: 1.2rem; 
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5);
+            text-align: center;
+        }
+        /* Conteneur agrandi (occupe la majorité de l'écran) */
+        .container {
+            position: relative;
+            width: 95%;
+            max-width: 900px;
+            height: 80vh;
+            border: 2px solid rgba(0, 255, 204, 0.4);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 0 35px rgba(0, 255, 204, 0.25);
+        }
+        video { display: none; }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #startBtn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 18px 36px;
+            font-size: 1.1rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            background-color: rgba(0, 20, 20, 0.95);
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            border-radius: 8px;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.5);
+            transition: all 0.3s ease;
+        }
+        #startBtn:hover {
+            background-color: #00ffcc;
+            color: #030712;
+            box-shadow: 0 0 30px #00ffcc;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>⚡ SUIVI DE VISAGE ⚡</h2>
+    
+    <div class="container">
+        <button id="startBtn">INITIALISER LA CAMÉRA</button>
+        <video class="input_video" autoplay playsinline muted></video>
+        <canvas class="output_canvas"></canvas>
+    </div>
+
+    <script>
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const canvasElement = document.getElementsByClassName('output_canvas')[0];
+        const canvasCtx = canvasElement.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+
+        function onResults(results) {
+            canvasElement.width = videoElement.videoWidth || 640;
+            canvasElement.height = videoElement.videoHeight || 480;
+            const width = canvasElement.width;
+            const height = canvasElement.height;
+
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, width, height);
+
+            // 1. Rendu vidéo inversé en miroir
+            canvasCtx.save();
+            canvasCtx.scale(-1, 1);
+            canvasCtx.translate(-width, 0);
+            canvasCtx.drawImage(results.image, 0, 0, width, height);
+            canvasCtx.restore();
+
+            // 2. Traitement des visages
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                
+                results.multiFaceLandmarks.forEach((landmarks, index) => {
+
+                    let minX = width, maxX = 0, minY = height, maxY = 0;
+                    for (const pt of landmarks) {
+                        const x = (1 - pt.x) * width;
+                        const y = pt.y * height;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+
+                    // Marge autour du visage
+                    const padding = 25;
+                    minX = Math.max(0, minX - padding);
+                    maxX = Math.min(width, maxX + padding);
+                    minY = Math.max(0, minY - padding);
+                    maxY = Math.min(height, maxY + padding);
+
+                    // Cadre Cyberpunk
+                    canvasCtx.strokeStyle = "#00ffcc";
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.shadowColor = "#00ffcc";
+                    canvasCtx.shadowBlur = 10;
+                    
+                    canvasCtx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+
+                    // Coins tactiques
+                    const cornerLen = 15;
+                    canvasCtx.lineWidth = 4;
+                    canvasCtx.beginPath();
+                    // Coin haut-gauche
+                    canvasCtx.moveTo(minX, minY + cornerLen); canvasCtx.lineTo(minX, minY); canvasCtx.lineTo(minX + cornerLen, minY);
+                    // Coin haut-droit
+                    canvasCtx.moveTo(maxX - cornerLen, minY); canvasCtx.lineTo(maxX, minY); canvasCtx.lineTo(maxX, minY + cornerLen);
+                    // Coin bas-gauche
+                    canvasCtx.moveTo(minX, maxY - cornerLen); canvasCtx.lineTo(minX, maxY); canvasCtx.lineTo(minX + cornerLen, maxY);
+                    // Coin bas-droit
+                    canvasCtx.moveTo(maxX - cornerLen, maxY); canvasCtx.lineTo(maxX, maxY); canvasCtx.lineTo(maxX, maxY - cornerLen);
+                    canvasCtx.stroke();
+
+                    // Point central (Nez)
+                    canvasCtx.fillStyle = "#ff0055";
+                    canvasCtx.shadowColor = "#ff0055";
+                    const nose = landmarks[1];
+                    const noseX = (1 - nose.x) * width;
+                    const noseY = nose.y * height;
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(noseX, noseY, 4, 0, 2 * Math.PI);
+                    canvasCtx.fill();
+
+                    // Texte ID
+                    canvasCtx.fillStyle = "#00ffcc";
+                    canvasCtx.font = "bold 13px 'Courier New'";
+                    canvasCtx.shadowBlur = 5;
+                    canvasCtx.fillText(`ID : CIBLE_ACTIVE #${index + 1}`, minX, minY - 8);
+                });
+            }
+            canvasCtx.restore();
+        }
+
+        const faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+
+        faceMesh.setOptions({
+            maxNumFaces: 5,
+            refineLandmarks: false,
+            minDetectionConfidence: 0.3,
+            minTrackingConfidence: 0.3
+        });
+
+        faceMesh.onResults(onResults);
+
+        // Boucle de traitement optimisée à haute vitesse
+        async function processVideoFrame() {
+            if (!videoElement.paused && !videoElement.ended) {
+                await faceMesh.send({image: videoElement});
+            }
+            requestAnimationFrame(processVideoFrame);
+        }
+
+        startBtn.addEventListener('click', async () => {
+            startBtn.style.display = 'none';
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 60, max: 60 },
+                        facingMode: "user"
+                    }
+                });
+                videoElement.srcObject = stream;
+                videoElement.onloadedmetadata = () => {
+                    videoElement.play();
+                    requestAnimationFrame(processVideoFrame);
+                };
+            } catch (err) {
+                alert("Erreur d'accès à la caméra : " + err.message);
+                startBtn.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+  </html>
+  
